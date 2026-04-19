@@ -309,6 +309,10 @@ The smoke test expects:
 
 - `ssh`, `ssh-keyscan`, and `timeout`
 - a reachable SSH server on `localhost:22`
+
+The GitHub Actions workflow provisions a temporary local `sshd` before
+running the smoke test. For local runs, provide your own SSH server on
+`localhost:22`.
 - localhost SSH auth configured for your user or agent
 
 Manual checks:

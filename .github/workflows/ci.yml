@@ -33,5 +33,31 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Provision local SSH server for smoke test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+          cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          sudo mkdir -p /run/sshd
+          cat > /tmp/sshd_config <<EOF
+          Port 22
+          ListenAddress 127.0.0.1
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          AuthorizedKeysFile .ssh/authorized_keys
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          ChallengeResponseAuthentication no
+          PermitRootLogin no
+          UsePAM no
+          PidFile /tmp/sshd.pid
+          LogLevel VERBOSE
+          EOF
+          sudo /usr/sbin/sshd -f /tmp/sshd_config
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 127.0.0.1 true
+
       - name: Run smoke test
         run: timeout 60 ./scripts/smoke-local.sh
