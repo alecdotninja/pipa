@@ -34,25 +34,16 @@
             SSH connection, then reach it through standard OpenSSH
             <code>ProxyJump</code>.
           </p>
+          <p class="lede">
+            You do not have to memorize the flow. pipa.sh prints the next step
+            when you register a host, when you publish it, and when a new client
+            lands on the service.
+          </p>
           <div class="hero-actions">
             <a class="button primary" href="https://github.com/alecdotninja/pipa">View the repo</a>
             <a class="button secondary" href="#quickstart">See quick start</a>
           </div>
         </div>
-
-        <aside class="status-card">
-          <p class="card-label">Service model</p>
-          <ul class="check-list">
-            <li>SSH only</li>
-            <li>No shell on the relay</li>
-            <li>No generic TCP proxying</li>
-            <li>Routes only to live publishers</li>
-          </ul>
-          <p class="card-note">
-            The published SSH server stays responsible for host keys, user auth,
-            and account policy.
-          </p>
-        </aside>
       </header>
 
       <main>
@@ -70,7 +61,7 @@
             <article class="step">
               <span class="step-number">1</span>
               <h2>Register a hostname</h2>
-              <p>Connect to <code>pipa.sh</code> and get a random relay hostname plus a publish token.</p>
+              <p>Connect to <code>pipa.sh</code>, get a random relay hostname, and let the service print the publish command for you.</p>
               <pre><code>ssh anything@pipa.sh</code></pre>
             </article>
 
@@ -84,7 +75,7 @@
             <article class="step">
               <span class="step-number">3</span>
               <h2>Connect through ProxyJump</h2>
-              <p>Point OpenSSH at the relay once, then connect to published hosts normally.</p>
+              <p>Point OpenSSH at the relay once, then connect to published hosts normally. New clients also get setup directions if they hit the service directly.</p>
               <pre><code>Host *.pipa.sh
     HostName %h
     ProxyJump pipa.sh</code></pre>
