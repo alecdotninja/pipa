@@ -279,8 +279,8 @@ Two systemd examples are included:
 Install the binary and unit:
 
 ```sh
-cargo build --release
-sudo install -o root -g root -m 0755 target/release/pipa /usr/local/bin/pipa
+make
+sudo make install
 sudo install -o root -g root -m 0644 examples/systemd/pipa.service /etc/systemd/system/pipa.service
 sudo systemctl daemon-reload
 ```

@@ -1,6 +1,10 @@
 DEV_DIR := .dev
 DEV_DB := $(DEV_DIR)/pipa.sqlite3
 DEV_HOST_KEY := $(DEV_DIR)/pipa_host_ed25519_key
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+INSTALL ?= install
+RELEASE_BIN := target/release/pipa
 
 RELAY_LISTEN ?= 127.0.0.1:2222
 USAGE_LISTEN ?= 127.0.0.1:2223
@@ -8,7 +12,19 @@ RELAY_HOSTNAME ?= pipa.sh
 MAX_TUNNELS_PER_PUBLISHER ?= 10
 RUST_LOG ?= pipa=info,russh=warn
 
-.PHONY: dev dev-setup fmt test clippy smoke clean-dev
+.PHONY: all build release install dev dev-setup fmt test clippy smoke clean-dev
+
+all: release
+
+build:
+	cargo build
+
+release:
+	cargo build --release
+
+install: release
+	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
+	$(INSTALL) -o root -g root -m 0755 "$(RELEASE_BIN)" "$(DESTDIR)$(BINDIR)/pipa"
 
 dev: dev-setup
 	RUST_LOG="$(RUST_LOG)" cargo run -- \
