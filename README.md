@@ -288,11 +288,6 @@ Code layout:
 - `src/host_key.rs`: persistent SSH host-key loading and generation
 - `src/tests.rs`: core unit and regression tests
 
-Prototype limitation:
-
-- SQLite is local-process storage. A multi-node deployment needs a shared
-  registration service and coordinated active route discovery.
-
 ## Testing
 
 Automated:
