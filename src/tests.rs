@@ -52,9 +52,18 @@ fn header_preserves_ascii_art_prefix() {
 
     let header = policy.messages().header();
     let lines: Vec<_> = header.lines().collect();
-    assert_eq!(lines[0], "           __                                    __");
-    assert_eq!(lines[1], "          |  \\                                  |  \\");
-    assert_eq!(lines[2], "  ______   \\$$  ______    ______        _______ | $$____");
+    assert_eq!(
+        lines[0],
+        "           __                                    __"
+    );
+    assert_eq!(
+        lines[1],
+        "          |  \\                                  |  \\"
+    );
+    assert_eq!(
+        lines[2],
+        "  ______   \\$$  ______    ______        _______ | $$____"
+    );
     assert!(!header.contains("\\\\"));
 }
 
