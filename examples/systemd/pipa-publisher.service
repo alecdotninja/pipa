@@ -1,0 +1,33 @@
+[Unit]
+Description=Publish local SSH server through pipa.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Replace this with the publish token printed by pipa.sh registration.
+Environment=PIPA_PUBLISH_TOKEN=replace-me
+
+# The SSH config and keys live in the publisher user's home directory.
+Environment=HOME=%h
+ExecStart=/usr/bin/ssh \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -R 22:localhost:22 \
+  ${PIPA_PUBLISH_TOKEN}@pipa.sh
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# This unit is meant for systemd --user. The publishing user does not need root.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.ssh
+
+[Install]
+WantedBy=default.target

@@ -135,15 +135,6 @@ Run this on the machine that has the SSH server you want to publish:
             </article>
 
             <article class="faq-card">
-              <h3>Routing policy</h3>
-              <p>
-                The relay only forwards SSH on port <code>22</code> and only to
-                publishers that are connected right now. When a publisher drops,
-                the route disappears immediately.
-              </p>
-            </article>
-
-            <article class="faq-card">
               <h3>Bearer token model</h3>
               <p>
                 The generated publish command contains a token. Possession of
@@ -159,6 +150,16 @@ Run this on the machine that has the SSH server you want to publish:
                 server, test harness, and deployment notes, use the GitHub repo.
               </p>
               <p><a class="inline-link" href="https://github.com/alecdotninja/pipa">github.com/alecdotninja/pipa</a></p>
+            </article>
+
+            <article class="faq-card">
+              <h3>systemd examples</h3>
+              <p>
+                The repo includes example units for both sides: one hardened unit
+                for the relay server and one user-level unit for keeping a
+                publish session running in the background.
+              </p>
+              <p><a class="inline-link" href="https://github.com/alecdotninja/pipa/tree/main/examples/systemd">Browse the systemd examples</a></p>
             </article>
           </div>
         </section>

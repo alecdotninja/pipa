@@ -266,9 +266,15 @@ Host ssh.example.com
 
 The CNAME chain limit defaults to `8` and can be changed with `--cname-depth`.
 
-## systemd Deployment
+## systemd Examples
 
-An example hardened unit is provided at `examples/systemd/pipa.service`.
+Two systemd examples are included:
+
+- `examples/systemd/pipa.service`: hardened server-side unit for the relay host
+- `examples/systemd/pipa-publisher.service`: user-level unit for keeping a
+  publish session alive on the publishing machine
+
+### Relay Server
 
 Install the binary and unit:
 
@@ -288,6 +294,31 @@ Environment=JUMPSRV_USAGE_LISTEN=203.0.113.11:22,[2001:db8::11]:22
 ```
 
 The unit runs with `DynamicUser=true`, stores state under `/var/lib/pipa`, grants only `CAP_NET_BIND_SERVICE` for binding port 22, and uses a strict filesystem/kernel/device sandbox. It intentionally does not use systemd `IPAddressDeny=any`: pipa must accept arbitrary client and publisher IPs, and CNAME routing needs DNS resolution. Enforce broader ingress, egress, and bandwidth policy with the host firewall, traffic control, or surrounding network policy.
+
+### Publisher Session
+
+The example publisher unit is meant for `systemd --user`, not root. Install it
+on the machine that is publishing its local SSH server:
+
+```sh
+mkdir -p ~/.config/systemd/user
+cp examples/systemd/pipa-publisher.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+```
+
+Edit the unit and replace `PIPA_PUBLISH_TOKEN=replace-me` with the token from
+the registration step. Then enable it:
+
+```sh
+systemctl --user enable --now pipa-publisher.service
+```
+
+If you want the publisher to stay up without an active login session, enable
+lingering for that user:
+
+```sh
+loginctl enable-linger <user>
+```
 
 ## Test Plan
 
