@@ -22,7 +22,7 @@ build:
 release:
 	cargo build --release
 
-install: release
+install: 
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
 	$(INSTALL) -o root -g root -m 0755 "$(RELEASE_BIN)" "$(DESTDIR)$(BINDIR)/pipa"
 
