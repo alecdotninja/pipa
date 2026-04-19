@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>pipa.sh</title>
+    <meta
+      name="description"
+      content="pipa.sh is a public SSH relay for exposing an SSH server behind NAT and reaching it through OpenSSH ProxyJump."
+    >
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Public SSH Relay</p>
+          <pre class="logo" aria-label="pipa.sh logo">
+           __                                    __
+          |  \                                  |  \
+  ______   \$$  ______    ______        _______ | $$____
+ /      \ |  \ /      \  |      \      /       \| $$    \
+|  $$$$$$\| $$|  $$$$$$\  \$$$$$$\    |  $$$$$$$| $$$$$$$\
+| $$  | $$| $$| $$  | $$ /      $$     \$$    \ | $$  | $$
+| $$__/ $$| $$| $$__/ $$|  $$$$$$$ __  _\$$$$$$\| $$  | $$
+| $$    $$| $$| $$    $$ \$$    $$|  \|       $$| $$  | $$
+| $$$$$$$  \$$| $$$$$$$   \$$$$$$$ \$$ \$$$$$$$  \$$   \$$
+| $$          | $$
+| $$          | $$
+ \$$           \$$
+          </pre>
+          <p class="lede">
+            pipa.sh lets you expose an SSH server from behind NAT with a reverse
+            SSH connection, then reach it through standard OpenSSH
+            <code>ProxyJump</code>.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="https://github.com/alecdotninja/pipa">View the repo</a>
+            <a class="button secondary" href="#quickstart">See quick start</a>
+          </div>
+        </div>
+
+        <aside class="status-card">
+          <p class="card-label">Service model</p>
+          <ul class="check-list">
+            <li>SSH only</li>
+            <li>No shell on the relay</li>
+            <li>No generic TCP proxying</li>
+            <li>Routes only to live publishers</li>
+          </ul>
+          <p class="card-note">
+            The published SSH server stays responsible for host keys, user auth,
+            and account policy.
+          </p>
+        </aside>
+      </header>
+
+      <main>
+        <section class="band" id="quickstart">
+          <div class="section-head">
+            <p class="eyebrow">Quick Start</p>
+            <h1>Three steps</h1>
+            <p>
+              The relay has one job: connect a public SSH client to a live SSH
+              server running somewhere else.
+            </p>
+          </div>
+
+          <div class="steps">
+            <article class="step">
+              <span class="step-number">1</span>
+              <h2>Register a hostname</h2>
+              <p>Connect to <code>pipa.sh</code> and get a random relay hostname plus a publish token.</p>
+              <pre><code>ssh anything@pipa.sh</code></pre>
+            </article>
+
+            <article class="step">
+              <span class="step-number">2</span>
+              <h2>Publish from the machine behind NAT</h2>
+              <p>Run the printed reverse SSH command on the machine that has the SSH server you want to expose.</p>
+              <pre><code>ssh -R 22:localhost:22 &lt;token&gt;@pipa.sh</code></pre>
+            </article>
+
+            <article class="step">
+              <span class="step-number">3</span>
+              <h2>Connect through ProxyJump</h2>
+              <p>Point OpenSSH at the relay once, then connect to published hosts normally.</p>
+              <pre><code>Host *.pipa.sh
+    HostName %h
+    ProxyJump pipa.sh</code></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="band split-band">
+          <div class="terminal-panel">
+            <p class="panel-title">Publisher flow</p>
+            <pre><code>$ ssh anything@pipa.sh
+...
+Your relay hostname is ready:
+
+  x7k2m4q9pa.pipa.sh
+
+Run this on the machine that has the SSH server you want to publish:
+
+  $ ssh -R 22:localhost:22 fz6rvtz2w6aj76my5gjzqqum@pipa.sh</code></pre>
+          </div>
+
+          <div class="detail-stack">
+            <article class="detail-card">
+              <h2>What it is</h2>
+              <p>
+                pipa.sh is a small SSH relay for intentionally public hosts. It
+                keeps the routing logic in the relay and leaves final
+                authentication to the published SSH server.
+              </p>
+            </article>
+
+            <article class="detail-card">
+              <h2>What it is not</h2>
+              <p>
+                It is not a shell host, not a web control plane, and not a
+                generic port-forwarding service to the wider Internet.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="band faq-band">
+          <div class="section-head">
+            <p class="eyebrow">Notes</p>
+            <h2>Basic behavior</h2>
+          </div>
+
+          <div class="faq-grid">
+            <article class="faq-card">
+              <h3>Custom domains</h3>
+              <p>
+                You can point your own SSH hostname at a published
+                <code>*.pipa.sh</code> host with a CNAME. The relay follows the
+                CNAME chain and routes only if the final name is a registered,
+                live publisher.
+              </p>
+            </article>
+
+            <article class="faq-card">
+              <h3>Routing policy</h3>
+              <p>
+                The relay only forwards SSH on port <code>22</code> and only to
+                publishers that are connected right now. When a publisher drops,
+                the route disappears immediately.
+              </p>
+            </article>
+
+            <article class="faq-card">
+              <h3>Bearer token model</h3>
+              <p>
+                The generated publish command contains a token. Possession of
+                that token is enough to publish the hostname, so treat the full
+                command like a secret.
+              </p>
+            </article>
+
+            <article class="faq-card">
+              <h3>Source</h3>
+              <p>
+                The implementation is intentionally small and readable. For the
+                server, test harness, and deployment notes, use the GitHub repo.
+              </p>
+              <p><a class="inline-link" href="https://github.com/alecdotninja/pipa">github.com/alecdotninja/pipa</a></p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
