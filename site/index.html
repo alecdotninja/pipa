@@ -59,107 +59,69 @@
 
           <div class="steps">
             <article class="step">
-              <span class="step-number">1</span>
-              <h2>Register a hostname</h2>
-              <p>Connect to <code>pipa.sh</code>, get a random relay hostname, and let the service print the publish command for you.</p>
+              <div class="step-header">
+                <span class="step-number">1</span>
+                <div>
+                  <h2>SSH into <code>pipa.sh</code> to get a hostname</h2>
+                  <p>
+                    Start by registering with the relay. It prints a random
+                    hostname under <code>*.pipa.sh</code> and the exact publish
+                    command for the next step.
+                  </p>
+                </div>
+              </div>
               <pre><code>ssh pipa.sh</code></pre>
+              <p class="step-note">
+                Want your own hostname instead of the generated one? Point a
+                custom domain at the published <code>*.pipa.sh</code> name with
+                a CNAME record and the relay will follow it.
+              </p>
             </article>
 
             <article class="step">
-              <span class="step-number">2</span>
-              <h2>Publish from the machine behind NAT</h2>
-              <p>Run the printed reverse SSH command on the machine that has the SSH server you want to expose.</p>
+              <div class="step-header">
+                <span class="step-number">2</span>
+                <div>
+                  <h2>Run the SSH forward command</h2>
+                  <p>
+                    Execute the printed reverse SSH command on the machine
+                    behind NAT that already has the SSH server you want to
+                    expose.
+                  </p>
+                </div>
+              </div>
               <pre><code>ssh -R 22:localhost:22 &lt;token&gt;@pipa.sh</code></pre>
+              <p class="step-note">
+                You can keep this alive with a user-level systemd unit instead
+                of running it manually. See the
+                <a class="inline-link" href="https://github.com/alecdotninja/pipa/tree/main/examples/systemd">example units in the repo</a>.
+              </p>
             </article>
 
             <article class="step">
-              <span class="step-number">3</span>
-              <h2>Connect through ProxyJump</h2>
-              <p>Point OpenSSH at the relay once, then connect to published hosts normally. New clients also get setup directions if they hit the service directly.</p>
+              <div class="step-header">
+                <span class="step-number">3</span>
+                <div>
+                  <h2>Connect as a client</h2>
+                  <p>
+                    After the publisher is live, connect to the hostname like
+                    any other SSH destination and let OpenSSH route through
+                    <code>pipa.sh</code>.
+                  </p>
+                </div>
+              </div>
+              <pre><code>ssh &lt;hostname&gt;.pipa.sh</code></pre>
+              <p class="step-note">
+                On a client&apos;s first direct connection, the service prints the
+                exact instructions for setting up <code>ProxyJump</code>:
+              </p>
               <pre><code>Host *.pipa.sh
     HostName %h
     ProxyJump pipa.sh</code></pre>
-            </article>
-          </div>
-        </section>
-
-        <section class="band split-band">
-          <div class="terminal-panel">
-            <p class="panel-title">Publisher flow</p>
-            <pre><code>$ ssh pipa.sh
-...
-Your relay hostname is ready:
-
-  x7k2m4q9pa.pipa.sh
-
-Run this on the machine that has the SSH server you want to publish:
-
-  $ ssh -R 22:localhost:22 fz6rvtz2w6aj76my5gjzqqum@pipa.sh</code></pre>
-          </div>
-
-          <div class="detail-stack">
-            <article class="detail-card">
-              <h2>What it is</h2>
-              <p>
-                pipa.sh is a small SSH relay for intentionally public hosts. It
-                keeps the routing logic in the relay and leaves final
-                authentication to the published SSH server.
+              <p class="step-note">
+                After that first setup, the only command most people need to
+                remember is <code>ssh &lt;hostname&gt;.pipa.sh</code>.
               </p>
-            </article>
-
-            <article class="detail-card">
-              <h2>What it is not</h2>
-              <p>
-                It is not a shell host, not a web control plane, and not a
-                generic port-forwarding service to the wider Internet.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section class="band faq-band">
-          <div class="section-head">
-            <p class="eyebrow">Notes</p>
-            <h2>Basic behavior</h2>
-          </div>
-
-          <div class="faq-grid">
-            <article class="faq-card">
-              <h3>Custom domains</h3>
-              <p>
-                You can point your own SSH hostname at a published
-                <code>*.pipa.sh</code> host with a CNAME. The relay follows the
-                CNAME chain and routes only if the final name is a registered,
-                live publisher.
-              </p>
-            </article>
-
-            <article class="faq-card">
-              <h3>Bearer token model</h3>
-              <p>
-                The generated publish command contains a token. Possession of
-                that token is enough to publish the hostname, so treat the full
-                command like a secret.
-              </p>
-            </article>
-
-            <article class="faq-card">
-              <h3>Source</h3>
-              <p>
-                The implementation is intentionally small and readable. For the
-                server, test harness, and deployment notes, use the GitHub repo.
-              </p>
-              <p><a class="inline-link" href="https://github.com/alecdotninja/pipa">github.com/alecdotninja/pipa</a></p>
-            </article>
-
-            <article class="faq-card">
-              <h3>systemd examples</h3>
-              <p>
-                The repo includes example units for both sides: one hardened unit
-                for the relay server and one user-level unit for keeping a
-                publish session running in the background.
-              </p>
-              <p><a class="inline-link" href="https://github.com/alecdotninja/pipa/tree/main/examples/systemd">Browse the systemd examples</a></p>
             </article>
           </div>
         </section>
