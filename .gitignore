@@ -1,0 +1,11 @@
+/target
+/.codex
+/jumpsrv.sqlite3
+/jumpsrv.sqlite3-shm
+/jumpsrv.sqlite3-wal
+/pipa.sqlite3
+/pipa.sqlite3-shm
+/pipa.sqlite3-wal
+/jumpsrv_host_ed25519_key
+/pipa_host_ed25519_key
+/.dev/

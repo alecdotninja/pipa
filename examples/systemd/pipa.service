@@ -1,0 +1,68 @@
+[Unit]
+Description=pipa.sh SSH-only NAT traversal relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Replace these with the public listener addresses assigned to this host.
+# Comma-separated lists allow dual-stack IPv4/IPv6 binding for each role.
+Environment=JUMPSRV_RELAY_LISTEN=203.0.113.10:22,[2001:db8::10]:22
+Environment=JUMPSRV_USAGE_LISTEN=203.0.113.11:22,[2001:db8::11]:22
+Environment=JUMPSRV_RELAY_HOSTNAME=pipa.sh
+Environment=JUMPSRV_DATABASE=/var/lib/pipa/registrations.sqlite3
+Environment=JUMPSRV_HOST_KEY=/var/lib/pipa/ssh_host_ed25519_key
+Environment=JUMPSRV_MAX_TUNNELS_PER_PUBLISHER=10
+Environment=RUST_LOG=pipa=info,russh=warn
+
+ExecStart=/usr/local/bin/pipa --json-logs
+Restart=on-failure
+RestartSec=2s
+KillSignal=SIGTERM
+TimeoutStopSec=20s
+LimitNOFILE=1048576
+
+# The service only needs to bind low TCP ports. It should not run as root.
+DynamicUser=true
+StateDirectory=pipa
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# File system sandbox. The SQLite database and host key live in StateDirectory.
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pipa
+PrivateTmp=true
+
+# Kernel, device, and namespace hardening.
+PrivateDevices=true
+DevicePolicy=closed
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+# Allow ordinary service, networking, and file-system syscalls, then deny broad
+# privilege-changing classes. Test on your target distro before production.
+SystemCallFilter=@system-service @network-io
+SystemCallFilter=~@privileged @resources @reboot @swap @mount @module @raw-io @obsolete @debug @cpu-emulation
+
+# pipa accepts arbitrary client/publisher IPs and performs DNS lookups for
+# CNAME routing, so IP egress/ingress restrictions are better enforced with the
+# host firewall or network policy for this service.
+
+[Install]
+WantedBy=multi-user.target
