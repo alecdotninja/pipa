@@ -37,29 +37,30 @@ impl Policy {
 impl Messages<'_> {
     /// Returns the shared relay banner and abuse note.
     pub(crate) fn header(&self) -> String {
-        format!(
-            "\
-           __                                    __
-          |  \\                                  |  \\
-  ______   \\$$  ______    ______        _______ | $$____
- /      \\ |  \\ /      \\  |      \\      /       \\| $$    \\
-|  $$$$$$\\| $$|  $$$$$$\\  \\$$$$$$\\    |  $$$$$$$| $$$$$$$\\
-| $$  | $$| $$| $$  | $$ /      $$     \\$$    \\ | $$  | $$
-| $$__/ $$| $$| $$__/ $$|  $$$$$$$ __  _\\$$$$$$\\| $$  | $$
-| $$    $$| $$| $$    $$ \\$$    $$|  \\|       $$| $$  | $$
-| $$$$$$$  \\$$| $$$$$$$   \\$$$$$$$ \\$$ \\$$$$$$$  \\$$   \\$$
+        const HEADER_TEMPLATE: &str = r#"           __                                    __
+          |  \                                  |  \
+  ______   \$$  ______    ______        _______ | $$____
+ /      \ |  \ /      \  |      \      /       \| $$    \
+|  $$$$$$\| $$|  $$$$$$\  \$$$$$$\    |  $$$$$$$| $$$$$$$\
+| $$  | $$| $$| $$  | $$ /      $$     \$$    \ | $$  | $$
+| $$__/ $$| $$| $$__/ $$|  $$$$$$$ __  _\$$$$$$\| $$  | $$
+| $$    $$| $$| $$    $$ \$$    $$|  \|       $$| $$  | $$
+| $$$$$$$  \$$| $$$$$$$   \$$$$$$$ \$$ \$$$$$$$  \$$   \$$
 | $$          | $$
 | $$          | $$
- \\$$           \\$$
+ \$$           \$$
 
 Free public SSH relay at pipa.sh. Please play nice:
 
     - bandwidth per connection is limited
-    - each published hostname can handle {limit} connections at a time
+    - each published hostname can handle __LIMIT__ connections at a time
     - please respect other users
     - please don't do anything that would get me banned from OVH
-",
-            limit = self.policy.max_tunnels_per_publisher,
+"#;
+
+        HEADER_TEMPLATE.replace(
+            "__LIMIT__",
+            &self.policy.max_tunnels_per_publisher.to_string(),
         )
     }
 

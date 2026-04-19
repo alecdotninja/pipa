@@ -42,6 +42,22 @@ fn usage_text_contains_proxyjump_config() {
     assert!(usage.contains("Host *.pipa.sh"));
 }
 
+/// Verifies the relay banner preserves its exact ASCII art prefix.
+#[test]
+fn header_preserves_ascii_art_prefix() {
+    let policy = Policy {
+        max_tunnels_per_publisher: 10,
+        relay_hostname: "pipa.sh".to_string(),
+    };
+
+    let header = policy.messages().header();
+    let lines: Vec<_> = header.lines().collect();
+    assert_eq!(lines[0], "           __                                    __");
+    assert_eq!(lines[1], "          |  \\                                  |  \\");
+    assert_eq!(lines[2], "  ______   \\$$  ______    ______        _______ | $$____");
+    assert!(!header.contains("\\\\"));
+}
+
 /// Verifies generated labels are safe DNS labels.
 #[test]
 fn random_labels_are_valid_host_labels() {
