@@ -1,80 +1,131 @@
 # pipa.sh
 
-Minimal Rust SSH jump server for an SSH-only public NAT traversal prototype.
+Minimal Rust SSH jump server for exposing an SSH server behind NAT and reaching
+it through standard OpenSSH `ProxyJump`.
 
-The server binds two SSH listeners:
+You can use the public service directly by SSHing into `pipa.sh`. The relay
+prints the next step when you register a host, when you publish it, and when a
+new client lands on the service.
 
-- Relay listener: users register a persisted random hostname here, publishers attach a reverse SSH forward here, and OpenSSH `ProxyJump` uses this listener for `direct-tcpip` routing.
-- Usage listener: users connect here to see client setup directions and the connection closes.
+The relay never starts a shell and never dials arbitrary TCP destinations. It
+exists only to connect a public SSH client to a live SSH server somewhere else.
 
-The relay never starts a shell and never dials arbitrary TCP destinations. If someone connects to either listener as if it were a normal shell server, it prints the relevant instructions and closes.
+## Quick Start
 
-## What It Does
+There are three normal steps:
 
-1. A user connects to the relay listener and gets a random hostname like `<random>.pipa.sh` plus a publish token.
-2. A publisher runs the generated reverse SSH command from the machine that has `localhost:22`.
-3. A client connects to the published hostname using standard OpenSSH `ProxyJump`.
-4. The relay routes only to live publisher sessions that already connected back.
+1. SSH into `pipa.sh` to get a hostname and publish token.
+2. Run the printed reverse SSH command on the machine behind NAT.
+3. Connect as a client with normal SSH.
 
-## Architecture
+### 1. Register a hostname
 
-`russh` handles SSH protocol framing, authentication, channels, and flow control. The jump server code implements policy and userspace dispatch:
+```sh
+ssh pipa.sh
+```
 
-1. A user connects to the relay listener, normally `pipa.sh`.
-2. The server allocates a random hostname under the relay hostname, normally `<random>.pipa.sh`, and stores it in SQLite.
-3. The registration output includes a bearer-token publish command. The token itself is the SSH username.
-4. The publisher requests remote forwarding:
-   `<random>.pipa.sh:22 -> localhost:22`
-   or a CNAME that terminates at that registered hostname.
-5. The server validates the hostname, port, and persisted publisher ownership, then stores:
-   `published hostname -> active publisher SSH session handle`.
-6. A client connects to the relay listener via ProxyJump. OpenSSH sends a `direct-tcpip` channel for `<random>.pipa.sh:22`.
-7. If the requested hostname is not directly live, the relay resolves DNS CNAMEs until there are no more CNAME records.
-8. The relay checks that the final hostname is registered and live, opens a `forwarded-tcpip` channel back to the publisher, and bridges channel data in both directions.
-9. When the publisher disconnects or cancels forwarding, the active route is removed immediately. The SQLite registration remains.
+The relay allocates a random hostname under `*.pipa.sh` and prints the exact
+publish command for the next step.
 
-Code layout:
+Example:
 
-- `src/app.rs`: process bootstrap, logging, and listener startup.
-- `src/ssh.rs`: relay and usage SSH servers plus channel bridging.
-- `src/registry.rs`: SQLite registrations and in-memory active route tracking.
-- `src/dns.rs`: CNAME following and registered-host resolution.
-- `src/messages.rs`: all user-facing text.
-- `src/util.rs`: shared constants and small helpers.
-- `src/host_key.rs`: persistent SSH host-key loading and generation.
-- `src/tests.rs`: core unit and regression tests.
+```text
+Your relay hostname is ready:
 
-## Trust Model
+  x7k2m4q9pa.pipa.sh
 
-This is an SSH relay for hosts that are intentionally public. The relay is not the final authentication boundary for the published host. The final SSH server behind the publisher remains responsible for host authentication, user authentication, authorization, logging, and account policy.
+Run this on the machine that has the SSH server you want to publish:
 
-The relay enforces:
+  ssh -R 22:localhost:22 fz6rvtz2w6aj76my5gjzqqum@pipa.sh
+```
 
-- no shell, PTY, exec, SFTP, or agent forwarding on the relay
-- normal shell attempts on the usage listener receive client setup text and close
-- normal shell attempts on the relay listener allocate a random hostname, print a publish command, and close
-- registrations are persisted in SQLite
-- publishing is authorized by the bearer token generated at registration time; possession of that token is sufficient to publish for that hostname
-- publisher remote-forward requests may use either the registered hostname or a CNAME that terminates there
-- client routing only to port `22`
-- client routing only to registered hostnames under the relay hostname namespace
-- client routing through custom domains only when DNS CNAMEs terminate at a registered service hostname
-- client routing only while a matching publisher connection is live
-- per-publisher tunnel limits
+### 2. Publish from the machine behind NAT
 
-### v1 Authentication Model
+Run the printed command on the machine that has the SSH server you want to
+expose:
 
-Relay authentication is intentionally minimal in this prototype. Registration and client setup sessions may authenticate with SSH `none`, password, keyboard-interactive, or public key. Those methods are only used to get a user far enough to print instructions or allocate a hostname.
+```sh
+ssh -R 22:localhost:22 <token>@pipa.sh
+```
 
-Publishing uses a generated bearer capability, not an account login. The token itself is the SSH username, and possession of that token is sufficient to publish the registered hostname. Treat the full publish command as a secret. Anyone who obtains it can publish for that hostname until the registration is removed or rotated.
+If the session stays open, the hostname is live. The relay prints a short
+status message and then one line per client connection.
 
-The relay remains separate from final host authentication. The published SSH server is still responsible for host keys, user authentication, authorization, logging, and account policy.
+If you want this to persist in the background, see
+[`examples/systemd/pipa-publisher.service`](examples/systemd/pipa-publisher.service).
 
-Prototype limitations:
+### 3. Connect as a client
 
-- SQLite is local-process storage. A multi-node deployment needs a shared registration service and coordinated active route discovery.
+After the publisher is live, clients connect normally:
 
-## Hostnames
+```sh
+ssh <hostname>.pipa.sh
+```
+
+The first time a client hits the service directly, it prints the `ProxyJump`
+setup it expects:
+
+```sshconfig
+Host *.pipa.sh
+  HostName %h
+  ProxyJump pipa.sh
+```
+
+After that first setup, the only command most users need to remember is
+`ssh <hostname>.pipa.sh`.
+
+## Custom Domains
+
+You can point your own hostname at a published `*.pipa.sh` hostname with a
+CNAME:
+
+```dns
+ssh.example.com. 300 IN CNAME x7k2m4q9pa.pipa.sh.
+```
+
+The relay follows CNAMEs and routes only if the final hostname is a registered,
+live publisher. The same rule applies to publisher authorization: the publisher
+may use either the registered hostname or a CNAME that terminates there.
+
+Client config for a custom hostname:
+
+```sshconfig
+Host ssh.example.com
+  HostName %h
+  ProxyJump pipa.sh
+```
+
+The CNAME chain limit defaults to `8` and can be changed with `--cname-depth`.
+
+## What The Relay Enforces
+
+- No shell, PTY, exec, SFTP, or agent forwarding on the relay.
+- Normal shell attempts on `pipa.sh` allocate a random hostname, print a publish
+  command, and close.
+- Client-setup sessions print usage directions and close.
+- Registrations are persisted in SQLite.
+- Publishing is authorized by the generated bearer token.
+- Client routing is limited to port `22`.
+- Client routing is limited to registered hostnames under the relay namespace.
+- Client routing stays live only while the matching publisher session is live.
+- Per-publisher tunnel limits are enforced in process.
+
+This is an SSH relay for hosts that are intentionally public. The published SSH
+server remains responsible for host authentication, user authentication,
+authorization, logging, and account policy.
+
+## Authentication Model
+
+Relay authentication is intentionally minimal in this prototype. Registration
+and client-setup sessions may authenticate with SSH `none`, password,
+keyboard-interactive, or public key. Those methods are only used to get a user
+far enough to print instructions or allocate a hostname.
+
+Publishing uses a generated bearer capability, not a normal account login. The
+token itself is the SSH username, and possession of that token is sufficient to
+publish the registered hostname. Treat the full publish command as a secret.
+
+## Configuration
 
 Defaults:
 
@@ -82,8 +133,6 @@ Defaults:
 - Published hostnames: `<random>.pipa.sh`
 - SQLite database: `pipa.sqlite3`
 - Relay host key: `pipa_host_ed25519_key`
-
-In deployment, point `pipa.sh` at the relay listener IP and point `*.pipa.sh` at the usage listener IP. During CNAME routing, the relay cares only about the final hostname after following CNAMEs.
 
 Relevant options:
 
@@ -93,9 +142,15 @@ Relevant options:
 --host-key ./pipa_host_ed25519_key
 ```
 
-`--relay-hostname` controls both the relay login host and the suffix used for allocated hostnames and `Host *.<relay-hostname>` snippets. `--host-key` points at the relay SSH host key; the server loads it if present or generates an Ed25519 key if it does not exist.
+`--relay-hostname` controls both the relay login hostname and the suffix used
+for allocated hostnames. `--host-key` points at the relay SSH host key; the
+server loads it if present or generates an Ed25519 key if it does not exist.
 
-## Development
+In deployment, point `pipa.sh` at the relay listener IP and point `*.pipa.sh`
+at the usage listener IP. During routing, the relay only cares about the final
+hostname after following any CNAMEs.
+
+## Running Locally
 
 This workspace uses current stable Rust for dependency compatibility:
 
@@ -131,7 +186,10 @@ Default in-process limit:
 
 - `--max-tunnels-per-publisher 10`
 
-The server does not enforce a global connection cap, global tunnel cap, or bandwidth throttle. Handle those with firewall, traffic control, load balancer, or host-level policy. Set a high file descriptor limit for production, for example systemd `LimitNOFILE=1048576`.
+The server does not enforce a global connection cap, global tunnel cap, or
+bandwidth throttle. Handle those with firewall, traffic control, load balancer,
+or host-level policy. Set a high file descriptor limit for production, for
+example systemd `LimitNOFILE=1048576`.
 
 For structured logs:
 
@@ -139,136 +197,13 @@ For structured logs:
 RUST_LOG=pipa=debug,russh=warn cargo run -- --json-logs
 ```
 
-Each successful bridged tunnel emits a `tunnel connected` log event with the normal tracing timestamp plus `client_ip`, `client_peer`, `publisher_ip`, `publisher_peer`, `requested_hostname`, and `registered_hostname`.
-
-## User Flow
-
-There are three normal user actions:
-
-1. Read client setup from the usage listener.
-2. Register a hostname on the relay listener.
-3. Run the generated publish command from the machine that owns the target SSH server.
-
-### Usage Listener
-
-```sh
-ssh anything@docs.pipa.sh
-```
-
-The usage listener accepts the login, prints a `ProxyJump` config example, sends EOF, and closes.
-
-### Relay Registration
-
-```sh
-ssh anything@pipa.sh
-```
-
-The relay listener accepts the login, registers a random `*.pipa.sh` hostname in SQLite, prints a publish command, sends EOF, and closes.
-
-Example registration output:
-
-```text
-Registered hostname:
-
-  x7k2m4q9pa.pipa.sh
-
-Publish your local SSH server with:
-
-  ssh -R 22:localhost:22 fz6rvtz2w6aj76my5gjzqqum@pipa.sh
-
-The publish token is the secret that controls this hostname. The command can be moved to another machine without moving the registration machine's SSH private key.
-```
-
-You can also use `-R 0:localhost:22`, `-R x7k2m4q9pa.pipa.sh:22:localhost:22`, or `-R x7k2m4q9pa.pipa.sh:0:localhost:22`. Explicit hostnames may also be custom CNAMEs that resolve through to the registered hostname.
-
-### Publisher Setup
-
-Register first:
-
-```sh
-ssh anything@pipa.sh
-```
-
-Then run the printed publish command:
-
-```sh
-ssh \
-  -R 22:localhost:22 \
-  fz6rvtz2w6aj76my5gjzqqum@pipa.sh
-```
-
-Publisher SSH config snippet:
-
-```sshconfig
-Host pipa-publisher
-  HostName pipa.sh
-  User fz6rvtz2w6aj76my5gjzqqum
-  ExitOnForwardFailure yes
-  RemoteForward 22 localhost:22
-```
-
-Connect with:
-
-```sh
-ssh pipa-publisher
-```
-
-When the session stays open, the relay prints:
-
-- a welcome line confirming the published hostname
-- one line per client connection, including a timestamp and the client IP seen by the relay
-
-If you prefer a silent background publish session, you can still add `-N`, but then there is no terminal to receive these notices.
-
-### Client ProxyJump Setup
-
-Client SSH config snippet:
-
-```sshconfig
-Host *.pipa.sh
-  HostName %h
-  User your-user-on-the-published-host
-  ProxyJump pipa.sh
-```
-
-Connect through the relay:
-
-```sh
-ssh x7k2m4q9pa.pipa.sh
-```
-
-The relay receives a `direct-tcpip` request for `x7k2m4q9pa.pipa.sh:22`, looks up the active publisher, and bridges the SSH handshake to the publisher's `localhost:22`.
-
-## Custom Domains
-
-Users may point their own SSH hostname at a published service hostname with a CNAME:
-
-```dns
-ssh.example.com. 300 IN CNAME x7k2m4q9pa.pipa.sh.
-```
-
-During relay routing, only the final DNS name after following CNAMEs matters:
-
-1. Client requests `ssh.example.com:22` through ProxyJump.
-2. Relay resolves `ssh.example.com -> x7k2m4q9pa.pipa.sh`.
-3. Relay routes only if `x7k2m4q9pa.pipa.sh` is currently registered by a live publisher.
-
-The same rule applies to publisher authorization. A publisher may use either the registered hostname in `-R` or a CNAME that terminates there.
-
-Client config for a custom domain:
-
-```sshconfig
-Host ssh.example.com
-  HostName ssh.example.com
-  User your-user-on-the-published-host
-  ProxyJump pipa.sh
-```
-
-The CNAME chain limit defaults to `8` and can be changed with `--cname-depth`.
+Each successful bridged tunnel emits a `tunnel connected` log event with
+`client_ip`, `client_peer`, `publisher_ip`, `publisher_peer`,
+`requested_hostname`, and `registered_hostname`.
 
 ## systemd Examples
 
-Two systemd examples are included:
+Two example units are included:
 
 - `examples/systemd/pipa.service`: hardened server-side unit for the relay host
 - `examples/systemd/pipa-publisher.service`: user-level unit for keeping a
@@ -285,15 +220,17 @@ sudo install -o root -g root -m 0644 examples/systemd/pipa.service /etc/systemd/
 sudo systemctl daemon-reload
 ```
 
-Before starting it, edit the unit and replace the example listener addresses. The
-listener env vars accept comma-separated address lists:
+Before starting it, edit the unit and replace the example listener addresses.
+The listener env vars accept comma-separated address lists:
 
 ```ini
 Environment=JUMPSRV_RELAY_LISTEN=203.0.113.10:22,[2001:db8::10]:22
 Environment=JUMPSRV_USAGE_LISTEN=203.0.113.11:22,[2001:db8::11]:22
 ```
 
-The unit runs with `DynamicUser=true`, stores state under `/var/lib/pipa`, grants only `CAP_NET_BIND_SERVICE` for binding port 22, and uses a strict filesystem/kernel/device sandbox. It intentionally does not use systemd `IPAddressDeny=any`: pipa must accept arbitrary client and publisher IPs, and CNAME routing needs DNS resolution. Enforce broader ingress, egress, and bandwidth policy with the host firewall, traffic control, or surrounding network policy.
+The unit runs with `DynamicUser=true`, stores state under `/var/lib/pipa`,
+grants only `CAP_NET_BIND_SERVICE` for binding port 22, and uses a strict
+filesystem, kernel, and device sandbox.
 
 ### Publisher Session
 
@@ -320,12 +257,48 @@ lingering for that user:
 loginctl enable-linger <user>
 ```
 
-## Test Plan
+## Architecture
+
+`russh` handles SSH protocol framing, authentication, channels, and flow
+control. The pipa application adds policy, registration, and routing:
+
+1. A user connects to the relay listener, normally `pipa.sh`.
+2. The server allocates a random hostname under the relay hostname and stores
+   it in SQLite.
+3. The registration output includes a bearer-token publish command.
+4. The publisher requests remote forwarding for port `22`.
+5. The server validates the hostname, port, and token ownership, then stores
+   the active route in memory.
+6. A client connects through `ProxyJump`.
+7. If necessary, the relay resolves CNAMEs until it reaches the registered
+   hostname.
+8. The relay opens a `forwarded-tcpip` channel back to the publisher and
+   bridges traffic in both directions.
+9. When the publisher disconnects, the active route is removed immediately. The
+   registration remains in SQLite.
+
+Code layout:
+
+- `src/app.rs`: process bootstrap, logging, and listener startup
+- `src/ssh.rs`: relay and usage SSH servers plus channel bridging
+- `src/registry.rs`: SQLite registrations and in-memory active route tracking
+- `src/dns.rs`: CNAME following and registered-host resolution
+- `src/messages.rs`: user-facing text
+- `src/util.rs`: shared constants and helpers
+- `src/host_key.rs`: persistent SSH host-key loading and generation
+- `src/tests.rs`: core unit and regression tests
+
+Prototype limitation:
+
+- SQLite is local-process storage. A multi-node deployment needs a shared
+  registration service and coordinated active route discovery.
+
+## Testing
 
 Automated:
 
 ```sh
-cargo fmt -- --check
+cargo fmt --check
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
@@ -340,23 +313,7 @@ The smoke test expects:
 
 - `ssh`, `ssh-keyscan`, and `timeout`
 - a reachable SSH server on `localhost:22`
-
-The GitHub Actions workflow provisions a temporary local `sshd` before
-running the smoke test. For local runs, provide your own SSH server on
-`localhost:22`.
 - localhost SSH auth configured for your user or agent
 
-Manual checks:
-
-- Connecting to the usage listener with a normal shell session prints usage directions and closes.
-- Connecting to the relay listener with a normal shell session prints a random hostname and publisher command.
-- Restarting the server preserves SQLite registrations, but not live publisher routes.
-- Publishing a registered hostname works only with the generated publish token.
-- Publishing via a CNAME alias works only when the final CNAME target is the registered hostname for that token.
-- Publishing with the wrong token, even for a known hostname, is rejected.
-- Publishing a hostname outside `*.pipa.sh` is rejected.
-- Publishing any port other than `22` is rejected.
-- Client `ProxyJump` to an unpublished hostname fails.
-- Client `ProxyJump` to a CNAME alias works only when the final CNAME target is a live registered hostname.
-- Client `ProxyJump` to a published hostname reaches the publisher's local SSH server.
-- Killing the publisher connection immediately removes the active route.
+The GitHub Actions workflow provisions a temporary local `sshd` before running
+the smoke test. For local runs, provide your own SSH server on `localhost:22`.
